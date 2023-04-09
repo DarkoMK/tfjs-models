@@ -15,14 +15,9 @@
  * =============================================================================
  */
 import * as posedetection from '@tensorflow-models/pose-detection';
-import * as scatter from 'scatter-gl';
+import {GameEngine} from './game_engine';
 
 import * as params from './params';
-import {isMobile} from './util';
-
-// These anchor points allow the pose pointcloud to resize according to its
-// position in the input.
-const ANCHOR_POINTS = [[0, 0, 0], [0, 1, 0], [-1, 0, 0], [-1, -1, 0]];
 
 // #ffffff - White
 // #800000 - Maroon
@@ -47,20 +42,16 @@ const ANCHOR_POINTS = [[0, 0, 0], [0, 1, 0], [-1, 0, 0], [-1, -1, 0]];
 const COLOR_PALETTE = [
   '#ffffff', '#800000', '#469990', '#e6194b', '#42d4f4', '#fabed4', '#aaffc3',
   '#9a6324', '#000075', '#f58231', '#4363d8', '#ffd8b1', '#dcbeff', '#808000',
-  '#ffe119', '#911eb4', '#bfef45', '#f032e6', '#3cb44b', '#a9a9a9'
+  '#ffe119', '#911eb4', '#bfef45', '#f032e6', '#3cb44b', '#a9a9a9',
 ];
 export class Camera {
   constructor(useGpuRenderer) {
     this.video = document.getElementById('video');
     this.canvas = document.getElementById('output');
     this.ctx = useGpuRenderer ? null : this.canvas.getContext('2d');
-    this.scatterGLEl = document.querySelector('#scatter-gl-container');
-    this.scatterGL = new scatter.ScatterGL(this.scatterGLEl, {
-      'rotateOnStart': true,
-      'selectEnabled': false,
-      'styles': {polyline: {defaultOpacity: 1, deselectedOpacity: 1}}
-    });
-    this.scatterGLHasInitialized = false;
+    this.gameEngine = new GameEngine();
+
+    setTimeout(() => this.gameEngine.startGame(), 3000);
   }
 
   /**
@@ -73,21 +64,19 @@ export class Camera {
           'Browser API navigator.mediaDevices.getUserMedia not available');
     }
 
-    const {targetFPS, sizeOption} = cameraParam;
-    const $size = params.VIDEO_SIZE[sizeOption];
+    const {targetFPS} = cameraParam;
     const videoConfig = {
       'audio': false,
       'video': {
         facingMode: 'user',
         // Only setting the video to a specified size for large screen, on
         // mobile devices accept the default size.
-        width: isMobile() ? params.VIDEO_SIZE['360 X 270'].width : $size.width,
-        height: isMobile() ? params.VIDEO_SIZE['360 X 270'].height :
-                             $size.height,
+        width: 1280,
+        height: 720,
         frameRate: {
           ideal: targetFPS,
-        }
-      }
+        },
+      },
     };
 
     const stream = await navigator.mediaDevices.getUserMedia(videoConfig);
@@ -109,25 +98,28 @@ export class Camera {
     camera.video.width = videoWidth;
     camera.video.height = videoHeight;
 
+    Camera.resizeCanvas(camera);
+
+    window.addEventListener('resize', () => {
+      Camera.resizeCanvas(camera);
+    });
+
+
+    return camera;
+  }
+
+  static resizeCanvas(camera) {
+    const videoWidth = camera.video.videoWidth;
+    const videoHeight = camera.video.videoHeight;
+
     camera.canvas.width = videoWidth;
     camera.canvas.height = videoHeight;
-    const canvasContainer = document.querySelector('.canvas-wrapper');
-    canvasContainer.style = `width: ${videoWidth}px; height: ${videoHeight}px`;
 
     if (camera.ctx != null) {
       // Because the image from camera is mirrored, need to flip horizontally.
       camera.ctx.translate(camera.video.videoWidth, 0);
       camera.ctx.scale(-1, 1);
-
-      camera.scatterGLEl.style =
-          `width: ${videoWidth}px; height: ${videoHeight}px;`;
-      camera.scatterGL.resize();
-
-      camera.scatterGLEl.style.display =
-          params.STATE.modelConfig.render3D ? 'inline-block' : 'none';
     }
-
-    return camera;
   }
 
   drawCtx() {
@@ -157,9 +149,7 @@ export class Camera {
     if (pose.keypoints != null) {
       this.drawKeypoints(pose.keypoints);
       this.drawSkeleton(pose.keypoints, pose.id);
-    }
-    if (pose.keypoints3D != null && params.STATE.modelConfig.render3D) {
-      this.drawKeypoints3D(pose.keypoints3D);
+      this.gameEngine.poseCalculator(pose);
     }
   }
 
@@ -216,7 +206,7 @@ export class Camera {
     this.ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
 
     posedetection.util.getAdjacentPairs(params.STATE.model).forEach(([
-                                                                      i, j
+                                                                      i, j,
                                                                     ]) => {
       const kp1 = keypoints[i];
       const kp2 = keypoints[j];
@@ -233,42 +223,5 @@ export class Camera {
         this.ctx.stroke();
       }
     });
-  }
-
-  drawKeypoints3D(keypoints) {
-    const scoreThreshold = params.STATE.modelConfig.scoreThreshold || 0;
-    const pointsData =
-        keypoints.map(keypoint => ([-keypoint.x, -keypoint.y, -keypoint.z]));
-
-    const dataset =
-        new scatter.ScatterGL.Dataset([...pointsData, ...ANCHOR_POINTS]);
-
-    const keypointInd =
-        posedetection.util.getKeypointIndexBySide(params.STATE.model);
-    this.scatterGL.setPointColorer((i) => {
-      if (keypoints[i] == null || keypoints[i].score < scoreThreshold) {
-        // hide anchor points and low-confident points.
-        return '#ffffff';
-      }
-      if (i === 0) {
-        return '#ff0000' /* Red */;
-      }
-      if (keypointInd.left.indexOf(i) > -1) {
-        return '#00ff00' /* Green */;
-      }
-      if (keypointInd.right.indexOf(i) > -1) {
-        return '#ffa500' /* Orange */;
-      }
-    });
-
-    if (!this.scatterGLHasInitialized) {
-      this.scatterGL.render(dataset);
-    } else {
-      this.scatterGL.updateDataset(dataset);
-    }
-    const connections = posedetection.util.getAdjacentPairs(params.STATE.model);
-    const sequences = connections.map(pair => ({indices: pair}));
-    this.scatterGL.setSequences(sequences);
-    this.scatterGLHasInitialized = true;
   }
 }

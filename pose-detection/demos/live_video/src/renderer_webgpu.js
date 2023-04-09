@@ -150,8 +150,8 @@ fn main(@location(0) score: f32) -> @location(0) vec4<f32> {
     // 'right_knee', 'left_ankle', 'right_ankle'. This demo draws the first
     // five.
     const poseIndexArray = new Uint32Array([
-      4, 2, 2, 0,  0,  1,  1,  3,  10, 8,  8, 6,  6,  5,  5,  7,
-      7, 9, 6, 12, 12, 14, 14, 16, 12, 11, 5, 11, 11, 13, 13, 15
+      4, 2, 2, 0, 0, 1, 1, 3, 10, 8, 8, 6, 6, 5, 5, 7,
+      7, 9, 6, 12, 12, 14, 14, 16, 12, 11, 5, 11, 11, 13, 13, 15,
     ]);
     this.poseIndexCount = poseIndexArray.length;
 
@@ -187,7 +187,7 @@ fn main(@location(0) score: f32) -> @location(0) vec4<f32> {
         buffer: scoresTensor.dataToGPU().buffer,
         offset: 0,
         size: byteSizeFromShape(scoresTensor.shape),
-      }
+      },
     ];
     return this.device.createBindGroup({
       layout: this.posePipeline.getBindGroupLayout(0),
@@ -210,7 +210,7 @@ fn main(@location(0) score: f32) -> @location(0) vec4<f32> {
         loadValue: {r: 0.5, g: 0.5, b: 0.5, a: 1.0},
         loadOp: 'load',
         storeOp: 'store',
-      }]
+      }],
     };
     const commandEncoder = this.device.createCommandEncoder();
     const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
@@ -253,7 +253,7 @@ fn main(@location(0) score: f32) -> @location(0) vec4<f32> {
       },
       primitive: {
         topology: 'line-list',
-      }
+      },
     });
   }
 
@@ -297,7 +297,7 @@ fn main(@location(0) score: f32) -> @location(0) vec4<f32> {
         loadValue: {r: 0.5, g: 0.5, b: 0.5, a: 1.0},
         loadOp: 'clear',
         storeOp: 'store',
-      }]
+      }],
     };
 
     const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);

@@ -20,7 +20,6 @@ import '@tensorflow/tfjs-backend-webgpu';
 
 import * as mpPose from '@mediapipe/pose';
 import * as tfjsWasm from '@tensorflow/tfjs-backend-wasm';
-import * as tf from '@tensorflow/tfjs-core';
 
 tfjsWasm.setWasmPaths(
     `https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@${
@@ -32,12 +31,9 @@ import {Camera} from './camera';
 import {RendererWebGPU} from './renderer_webgpu';
 import {setupDatGui} from './option_panel';
 import {STATE} from './params';
-import {setupStats} from './stats_panel';
 import {setBackendAndEnvFlags} from './util';
 
-let detector, camera, stats;
-let startInferenceTime, numInferences = 0;
-let inferenceTimeSum = 0, lastPanelUpdate = 0;
+let detector, camera;
 let rafId;
 let gpuRenderer = null;
 
@@ -49,7 +45,7 @@ async function createDetector() {
         architecture: 'MobileNetV1',
         outputStride: 16,
         inputResolution: {width: 500, height: 500},
-        multiplier: 0.75
+        multiplier: 0.75,
       });
     case posedetection.SupportedModels.BlazePose:
       const runtime = STATE.backend.split('-')[0];
@@ -58,7 +54,7 @@ async function createDetector() {
           runtime,
           modelType: STATE.modelConfig.type,
           solutionPath:
-              `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${mpPose.VERSION}`
+              `https://cdn.jsdelivr.net/npm/@mediapipe/pose@${mpPose.VERSION}`,
         });
       } else if (runtime === 'tfjs') {
         return posedetection.createDetector(
@@ -118,26 +114,6 @@ async function checkGuiUpdate() {
   }
 }
 
-function beginEstimatePosesStats() {
-  startInferenceTime = (performance || Date).now();
-}
-
-function endEstimatePosesStats() {
-  const endInferenceTime = (performance || Date).now();
-  inferenceTimeSum += endInferenceTime - startInferenceTime;
-  ++numInferences;
-
-  const panelUpdateMilliseconds = 1000;
-  if (endInferenceTime - lastPanelUpdate >= panelUpdateMilliseconds) {
-    const averageInferenceTime = inferenceTimeSum / numInferences;
-    inferenceTimeSum = 0;
-    numInferences = 0;
-    stats.customFpsPanel.update(
-        1000.0 / averageInferenceTime, 120 /* maxValue */);
-    lastPanelUpdate = endInferenceTime;
-  }
-}
-
 async function renderResult() {
   if (camera.video.readyState < 2) {
     await new Promise((resolve) => {
@@ -153,9 +129,6 @@ async function renderResult() {
   // Detector can be null if initialization failed (for example when loading
   // from a URL that does not exist).
   if (detector != null) {
-    // FPS only counts the time it takes to finish estimatePoses.
-    beginEstimatePosesStats();
-
     if (gpuRenderer && STATE.model !== 'PoseNet') {
       throw new Error('Only PoseNet supports GPU renderer!');
     }
@@ -179,8 +152,6 @@ async function renderResult() {
       detector = null;
       alert(error);
     }
-
-    endEstimatePosesStats();
   }
   if (gpuRenderer) {
     gpuRenderer.draw(
@@ -210,13 +181,8 @@ async function renderPrediction() {
 async function app() {
   // Gui content will change depending on which model is in the query string.
   const urlParams = new URLSearchParams(window.location.search);
-  if (!urlParams.has('model')) {
-    alert('Cannot find model in the query string.');
-    return;
-  }
   await setupDatGui(urlParams);
 
-  stats = setupStats();
   const isWebGPU = STATE.backend === 'tfjs-webgpu';
   const useGpuRenderer = (urlParams.get('gpuRenderer') === 'true') && isWebGPU;
   const importVideo = (urlParams.get('importVideo') === 'true') && isWebGPU;
