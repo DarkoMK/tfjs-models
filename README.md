@@ -1,6 +1,6 @@
 # A game using Pre-trained TensorFlow.js pose-detection model
 
-###Game requirements:
+### Game requirements:
 
 From the top border of the canvas, auto-generated balloons should fall with random numbers in them.
 In a given moment only one balloon should fall.
